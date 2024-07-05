@@ -2,11 +2,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+import { AudioLoader, AudioListener, PositionalAudio } from 'three'
 
 export default function Home() {
   const mountRef = useRef<HTMLDivElement>(null)
   const controlsRef = useRef<PointerLockControls | null>(null)
   const [score, setScore] = useState(0)
+  const [sound, setSound] = useState<THREE.PositionalAudio | null>(null)
 
   useEffect(() => {
     if (!mountRef.current) return
@@ -14,7 +17,7 @@ export default function Home() {
     // Scene setup
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    camera.position.y = 2 // Set initial height
+    camera.position.set(0, 2, 5) // Set the initial height of the camera
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(window.innerWidth, window.innerHeight)
     renderer.setClearColor(0x87CEEB) // Sky blue color
@@ -22,9 +25,29 @@ export default function Home() {
 
     // Controls
     controlsRef.current = new PointerLockControls(camera, renderer.domElement)
+    controlsRef.current.addEventListener('lock', () => {
+      console.log('Pointer locked')
+    })
+    controlsRef.current.addEventListener('unlock', () => {
+      console.log('Pointer unlocked')
+    })
     scene.add(controlsRef.current.getObject())
 
-    // Movement
+    // Load gunfire sound
+    const listener = new AudioListener()
+    camera.add(listener)
+    const gunSound = new PositionalAudio(listener)
+    const audioLoader = new AudioLoader()
+    audioLoader.load('/gunfire.mp3', (buffer) => {
+      gunSound.setBuffer(buffer)
+      gunSound.setLoop(false)
+      gunSound.setVolume(0.5)
+      setSound(gunSound)
+    }, undefined, (err) => {
+      console.error('An error happened while loading the sound:', err)
+    })
+
+    // Movement variables
     const velocity = new THREE.Vector3()
     const direction = new THREE.Vector3()
     let moveForward = false
@@ -81,18 +104,15 @@ export default function Home() {
       const wall = new THREE.Mesh(wallGeometry, wallMaterial)
       wall.position.set(x, y, z)
       scene.add(wall)
-      return wall
     }
 
     // Create a simple map
-    const walls = [
-      createWall(100, 10, 2, 0, 5, -50), // Back wall
-      createWall(100, 10, 2, 0, 5, 50), // Front wall
-      createWall(2, 10, 100, -50, 5, 0), // Left wall
-      createWall(2, 10, 100, 50, 5, 0), // Right wall
-      createWall(20, 10, 2, -20, 5, -20), // Internal wall 1
-      createWall(2, 10, 40, 20, 5, -10), // Internal wall 2
-    ]
+    createWall(100, 10, 2, 0, 5, -50) // Back wall
+    createWall(100, 10, 2, 0, 5, 50) // Front wall
+    createWall(2, 10, 100, -50, 5, 0) // Left wall
+    createWall(2, 10, 100, 50, 5, 0) // Right wall
+    createWall(20, 10, 2, -20, 5, -20) // Internal wall 1
+    createWall(2, 10, 40, 20, 5, -10) // Internal wall 2
 
     // Trees
     const treeGeometry = new THREE.ConeGeometry(5, 20, 32)
@@ -134,11 +154,15 @@ export default function Home() {
     }
 
     // Gun
-    const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.3)
-    const gunMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 })
-    const gun = new THREE.Mesh(gunGeometry, gunMaterial)
-    gun.position.set(0.3, -0.3, -0.5)
-    camera.add(gun)
+    const loader = new GLTFLoader()
+    loader.load('/gun.glb', (gltf) => {
+      const gun = gltf.scene
+      gun.scale.set(0.003, 0.003, 0.003) // Adjust scale to be smaller
+      gun.position.set(0.6, -0.4, -0.8) // Adjust position to the right side
+      gun.rotation.y = Math.PI // Rotate the gun to face the correct direction
+      camera.add(gun)
+      console.log('Gun loaded and added to camera')
+    })
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
@@ -171,6 +195,9 @@ export default function Home() {
             scene.add(newTarget)
             targets.push(newTarget)
           }
+        }
+        if (sound) {
+          sound.play()
         }
       }
     }
